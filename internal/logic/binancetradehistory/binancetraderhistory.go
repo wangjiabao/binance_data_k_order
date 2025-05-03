@@ -4494,6 +4494,8 @@ func (s *sBinanceTraderHistory) HandleKLine(ctx context.Context, day uint64) {
 
 						currentCoinUsdt += quantityFloat * price
 					}
+
+					time.Sleep(50 * time.Millisecond)
 				}
 
 				fmtOrderMap := float64(0)
@@ -4606,6 +4608,8 @@ func (s *sBinanceTraderHistory) HandleKLine(ctx context.Context, day uint64) {
 
 						currentCoinUsdt -= quantityFloat * price
 					}
+
+					time.Sleep(50 * time.Millisecond)
 				}
 
 				fmtOrderMap := float64(0)
@@ -4710,6 +4714,8 @@ func (s *sBinanceTraderHistory) HandleKLine(ctx context.Context, day uint64) {
 						orderMap.Set("BTCUSDT", quantityFloat)
 					}
 				}
+
+				time.Sleep(50 * time.Millisecond)
 			}
 
 			fmtOrderMap := float64(0)
@@ -4828,6 +4834,8 @@ func (s *sBinanceTraderHistory) HandleKLine(ctx context.Context, day uint64) {
 					orderMap.Set("BTCUSDT", quantityFloat)
 				}
 			}
+
+			time.Sleep(50 * time.Millisecond)
 		}
 
 		fmtOrderMap := float64(0)
