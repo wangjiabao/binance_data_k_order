@@ -6,6 +6,7 @@ require (
 	github.com/gateio/gateapi-go/v6 v6.71.0
 	github.com/gogf/gf/contrib/drivers/mysql/v2 v2.7.1
 	github.com/gogf/gf/v2 v2.7.1
+	github.com/shopspring/decimal v1.4.0
 )
 
 require (

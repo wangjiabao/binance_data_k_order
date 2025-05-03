@@ -19,6 +19,8 @@ type (
 		PullAndOrderNew(ctx context.Context, traderNum uint64, ipProxyUse int) (err error)
 		// GetGlobalInfo 获取全局测试数据
 		GetGlobalInfo(ctx context.Context)
+		// InitCoinInfo 初始化信息
+		InitCoinInfo(ctx context.Context) bool
 		// UpdateCoinInfo 初始化信息
 		UpdateCoinInfo(ctx context.Context) bool
 		// UpdateKeyPosition 更新keyPosition信息
@@ -35,6 +37,7 @@ type (
 		PullAndOrderNewGuiTu(ctx context.Context)
 		// PullAndOrderNewGuiTuPlay 拉取binance数据，新玩法滑点模式，仓位，根据cookie 龟兔赛跑
 		PullAndOrderNewGuiTuPlay(ctx context.Context)
+		HandleKLine(ctx context.Context, day uint64)
 		// HandleOrderAndOrder2 处理止盈和止损单
 		HandleOrderAndOrder2(ctx context.Context) bool
 		// PullAndClose 拉取binance数据

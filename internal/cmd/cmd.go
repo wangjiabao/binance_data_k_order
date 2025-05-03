@@ -5,6 +5,8 @@ import (
 	"binance_data_gf/internal/service"
 	"context"
 	"fmt"
+	"github.com/gogf/gf/v2/frame/g"
+	"github.com/gogf/gf/v2/net/ghttp"
 	"github.com/gogf/gf/v2/os/gcmd"
 	"github.com/gogf/gf/v2/os/gtimer"
 	"strconv"
@@ -22,6 +24,11 @@ var (
 		Brief: "listen trader",
 		Func: func(ctx context.Context, parser *gcmd.Parser) (err error) {
 			serviceBinanceTrader := service.BinanceTraderHistory()
+			// 初始化根据数据库现有人
+			if !serviceBinanceTrader.InitCoinInfo(ctx) {
+				fmt.Println("初始化现货币种，fail")
+				return nil
+			}
 
 			// 初始化根据数据库现有人
 			if !serviceBinanceTrader.UpdateCoinInfo(ctx) {
@@ -58,9 +65,22 @@ var (
 			//gtimer.AddSingleton(ctx, time.Second*1, handle4)
 
 			// 任务1 同步订单
-			go func() {
-				serviceBinanceTrader.PullAndOrderNewGuiTuPlay(ctx)
-			}()
+			//go func() {
+			//	serviceBinanceTrader.HandleKLine(ctx)
+			//}()
+
+			// 开启http管理服务
+			s := g.Server()
+			s.Group("/api", func(group *ghttp.RouterGroup) {
+				// 查询num
+				group.GET("/handle_k_line", func(r *ghttp.Request) {
+					serviceBinanceTrader.HandleKLine(ctx, r.Get("day").Uint64())
+					return
+				})
+			})
+
+			s.SetPort(80)
+			s.Run()
 
 			// 阻塞
 			select {}
