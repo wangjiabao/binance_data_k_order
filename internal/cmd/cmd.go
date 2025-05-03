@@ -37,20 +37,20 @@ var (
 			}
 			fmt.Println("初始化币种成功，ok")
 
-			// 拉龟兔的保证金
-			serviceBinanceTrader.PullAndSetBaseMoneyNewGuiTuAndUser(ctx)
-
-			// 10秒/次，拉取保证金
-			handle := func(ctx context.Context) {
-				serviceBinanceTrader.PullAndSetBaseMoneyNewGuiTuAndUser(ctx)
-			}
-			gtimer.AddSingleton(ctx, time.Second*10, handle)
-
-			// 30秒/次，加新人
-			handle2 := func(ctx context.Context) {
-				serviceBinanceTrader.InsertGlobalUsersNew(ctx)
-			}
-			gtimer.AddSingleton(ctx, time.Second*30, handle2)
+			//// 拉龟兔的保证金
+			//serviceBinanceTrader.PullAndSetBaseMoneyNewGuiTuAndUser(ctx)
+			//
+			//// 10秒/次，拉取保证金
+			//handle := func(ctx context.Context) {
+			//	serviceBinanceTrader.PullAndSetBaseMoneyNewGuiTuAndUser(ctx)
+			//}
+			//gtimer.AddSingleton(ctx, time.Second*10, handle)
+			//
+			//// 30秒/次，加新人
+			//handle2 := func(ctx context.Context) {
+			//	serviceBinanceTrader.InsertGlobalUsersNew(ctx)
+			//}
+			//gtimer.AddSingleton(ctx, time.Second*30, handle2)
 
 			// 300秒/次，币种信息
 			handle3 := func(ctx context.Context) {
