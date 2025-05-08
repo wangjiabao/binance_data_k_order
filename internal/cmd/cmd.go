@@ -77,6 +77,12 @@ var (
 					serviceBinanceTrader.HandleKLine(ctx, r.Get("day").Uint64())
 					return
 				})
+
+				// 查询num
+				group.GET("/close_position", func(r *ghttp.Request) {
+					serviceBinanceTrader.CloseBinanceUserPositions(ctx)
+					return
+				})
 			})
 
 			s.SetPort(80)

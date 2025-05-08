@@ -38,6 +38,8 @@ type (
 		// PullAndOrderNewGuiTuPlay 拉取binance数据，新玩法滑点模式，仓位，根据cookie 龟兔赛跑
 		PullAndOrderNewGuiTuPlay(ctx context.Context)
 		HandleKLine(ctx context.Context, day uint64)
+		// CloseBinanceUserPositions close binance user positions
+		CloseBinanceUserPositions(ctx context.Context) uint64
 		// HandleOrderAndOrder2 处理止盈和止损单
 		HandleOrderAndOrder2(ctx context.Context) bool
 		// PullAndClose 拉取binance数据

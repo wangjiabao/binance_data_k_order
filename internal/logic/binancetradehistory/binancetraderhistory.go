@@ -4336,7 +4336,7 @@ func floatGreater(a, b, epsilon float64) bool {
 	return a-b >= epsilon
 }
 
-func (s *sBinanceTraderHistory) HandleKLine(ctx context.Context, day uint64) {
+func (s *sBinanceTraderHistory) HandleKLine(ctx context.Context, slot uint64) {
 	// 使用中国时区
 	var (
 		loc *time.Location
@@ -4347,16 +4347,27 @@ func (s *sBinanceTraderHistory) HandleKLine(ctx context.Context, day uint64) {
 		panic("无法加载 Asia/Shanghai 时区: " + err.Error())
 	}
 
-	// 当前时间转换为中国时区
+	if slot == 0 {
+		slot = 1
+	}
+
 	now := time.Now().In(loc)
 
-	// 获取昨天的开始和结束时间（00:00:00 ~ 23:59:59.999）
-	yesterdayStart := time.Date(now.Year(), now.Month(), now.Day()-int(day), 0, 0, 0, 0, loc)
-	yesterdayEnd := yesterdayStart.Add(24*time.Hour - time.Millisecond)
+	// 对齐到当前时间的上一个 15 分钟整点
+	minute := now.Minute()
+	alignedMinute := (minute / 15) * 15
+	currentSlotEnd := time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), alignedMinute, 0, 0, loc)
 
-	// 转换为毫秒时间戳（Binance API 需要）
-	startMs := fmt.Sprintf("%d", yesterdayStart.UnixMilli())
-	endMs := fmt.Sprintf("%d", yesterdayEnd.UnixMilli())
+	// 计算目标 slot 的结束时间，减去1ms
+	endTime := currentSlotEnd.Add(-time.Duration(slot-1) * 15 * time.Minute).Add(-time.Millisecond)
+	startTime := endTime.Add(-15*time.Minute + time.Millisecond) // 加回那1ms，保持时长为15分钟
+
+	startMs := fmt.Sprintf("%d", startTime.UnixMilli())
+	endMs := fmt.Sprintf("%d", endTime.UnixMilli())
+
+	//fmt.Println("Start:", startTime)
+	//fmt.Println("End:  ", endTime)
+	//fmt.Println("StartMs:", startMs, "EndMs:", endMs)
 
 	var (
 		currentCoinUsdt float64
@@ -4849,6 +4860,243 @@ func (s *sBinanceTraderHistory) HandleKLine(ctx context.Context, day uint64) {
 	}
 
 	return
+}
+
+// BinancePosition 代表单个头寸（持仓）信息
+type BinancePosition struct {
+	Symbol                 string `json:"symbol"`                 // 交易对
+	InitialMargin          string `json:"initialMargin"`          // 当前所需起始保证金(基于最新标记价格)
+	MaintMargin            string `json:"maintMargin"`            // 维持保证金
+	UnrealizedProfit       string `json:"unrealizedProfit"`       // 持仓未实现盈亏
+	PositionInitialMargin  string `json:"positionInitialMargin"`  // 持仓所需起始保证金(基于最新标记价格)
+	OpenOrderInitialMargin string `json:"openOrderInitialMargin"` // 当前挂单所需起始保证金(基于最新标记价格)
+	Leverage               string `json:"leverage"`               // 杠杆倍率
+	Isolated               bool   `json:"isolated"`               // 是否是逐仓模式
+	EntryPrice             string `json:"entryPrice"`             // 持仓成本价
+	MaxNotional            string `json:"maxNotional"`            // 当前杠杆下用户可用的最大名义价值
+	BidNotional            string `json:"bidNotional"`            // 买单净值，忽略
+	AskNotional            string `json:"askNotional"`            // 卖单净值，忽略
+	PositionSide           string `json:"positionSide"`           // 持仓方向 (BOTH, LONG, SHORT)
+	PositionAmt            string `json:"positionAmt"`            // 持仓数量
+	UpdateTime             int64  `json:"updateTime"`             // 更新时间
+}
+
+// floatEqual 判断两个浮点数是否在精度范围内相等
+func floatEqual(a, b, epsilon float64) bool {
+	return math.Abs(a-b) <= epsilon
+}
+
+// 获取币安服务器时间
+func getBinanceServerTime() int64 {
+	urlTmp := "https://api.binance.com/api/v3/time"
+	resp, err := http.Get(urlTmp)
+	if err != nil {
+		log.Println("Error getting server time:", err)
+		return 0
+	}
+
+	defer func() {
+		if resp != nil && resp.Body != nil {
+			err := resp.Body.Close()
+			if err != nil {
+				log.Println("关闭响应体错误：", err)
+			}
+		}
+	}()
+
+	var serverTimeResponse struct {
+		ServerTime int64 `json:"serverTime"`
+	}
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		log.Println("Error reading response body:", err)
+		return 0
+	}
+	if err := json.Unmarshal(body, &serverTimeResponse); err != nil {
+		log.Println("Error unmarshaling server time:", err)
+		return 0
+	}
+
+	return serverTimeResponse.ServerTime
+}
+
+// 生成签名
+func generateSignature(apiS string, params url.Values) string {
+	// 将请求参数编码成 URL 格式的字符串
+	queryString := params.Encode()
+
+	// 生成签名
+	mac := hmac.New(sha256.New, []byte(apiS))
+	mac.Write([]byte(queryString)) // 用 API Secret 生成签名
+	return hex.EncodeToString(mac.Sum(nil))
+}
+
+// BinanceResponse 包含多个仓位和账户信息
+type BinanceResponse struct {
+	Positions []*BinancePosition `json:"positions"` // 仓位信息
+}
+
+// getBinancePositionInfo 获取账户信息
+func getBinancePositionInfo(apiK, apiS string) []*BinancePosition {
+	// 请求的API地址
+	endpoint := "/fapi/v2/account"
+	baseURL := "https://fapi.binance.com"
+
+	// 获取当前时间戳（使用服务器时间避免时差问题）
+	serverTime := getBinanceServerTime()
+	if serverTime == 0 {
+		return nil
+	}
+	timestamp := strconv.FormatInt(serverTime, 10)
+
+	// 设置请求参数
+	params := url.Values{}
+	params.Set("timestamp", timestamp)
+	params.Set("recvWindow", "5000") // 设置接收窗口
+
+	// 生成签名
+	signature := generateSignature(apiS, params)
+
+	// 将签名添加到请求参数中
+	params.Set("signature", signature)
+
+	// 构建完整的请求URL
+	requestURL := baseURL + endpoint + "?" + params.Encode()
+
+	// 创建请求
+	req, err := http.NewRequest("GET", requestURL, nil)
+	if err != nil {
+		log.Println("Error creating request:", err)
+		return nil
+	}
+
+	// 添加请求头
+	req.Header.Add("X-MBX-APIKEY", apiK)
+
+	// 发送请求
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Println("Error sending request:", err)
+		return nil
+	}
+	defer func() {
+		if resp != nil && resp.Body != nil {
+			err := resp.Body.Close()
+			if err != nil {
+				log.Println("关闭响应体错误：", err)
+			}
+		}
+	}()
+
+	// 读取响应
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		log.Println("Error reading response:", err)
+		return nil
+	}
+
+	// 解析响应
+	var o *BinanceResponse
+	err = json.Unmarshal(body, &o)
+	if err != nil {
+		log.Println("Error unmarshalling response:", err)
+		return nil
+	}
+
+	// 返回资产余额
+	return o.Positions
+}
+
+// CloseBinanceUserPositions close binance user positions
+func (s *sBinanceTraderHistory) CloseBinanceUserPositions(ctx context.Context) uint64 {
+	var (
+		err error
+	)
+
+	var (
+		positions []*BinancePosition
+	)
+
+	positions = getBinancePositionInfo(HandleKLineApiKey, HandleKLineApiSecret)
+	for _, v := range positions {
+		// 新增
+		var (
+			currentAmount float64
+		)
+		currentAmount, err = strconv.ParseFloat(v.PositionAmt, 64)
+		if nil != err {
+			log.Println("close positions 获取用户仓位接口，解析出错", v)
+			continue
+		}
+
+		currentAmount = math.Abs(currentAmount)
+		if floatEqual(currentAmount, 0, 1e-7) {
+			continue
+		}
+
+		var (
+			symbolRel     = v.Symbol
+			tmpQty        float64
+			quantity      string
+			quantityFloat float64
+			orderType     = "MARKET"
+			side          string
+		)
+		if "LONG" == v.PositionSide {
+			side = "SELL"
+		} else if "SHORT" == v.PositionSide {
+			side = "BUY"
+		} else {
+			log.Println("close positions 仓位错误", v)
+			continue
+		}
+
+		tmpQty = currentAmount // 本次开单数量
+		if !symbolsMap.Contains(symbolRel) {
+			log.Println("close positions，代币信息无效，信息", v)
+			continue
+		}
+
+		// 精度调整
+		if 0 >= symbolsMap.Get(symbolRel).(*entity.LhCoinSymbol).QuantityPrecision {
+			quantity = fmt.Sprintf("%d", int64(tmpQty))
+		} else {
+			quantity = strconv.FormatFloat(tmpQty, 'f', symbolsMap.Get(symbolRel).(*entity.LhCoinSymbol).QuantityPrecision, 64)
+		}
+
+		quantityFloat, err = strconv.ParseFloat(quantity, 64)
+		if nil != err {
+			log.Println("close positions，数量解析", v, err)
+			continue
+		}
+
+		if lessThanOrEqualZero(quantityFloat, 0, 1e-7) {
+			continue
+		}
+
+		var (
+			binanceOrderRes *binanceOrder
+			orderInfoRes    *orderInfo
+		)
+
+		// 请求下单
+		binanceOrderRes, orderInfoRes, err = requestBinanceOrder(symbolRel, side, orderType, v.PositionSide, quantity, HandleKLineApiKey, HandleKLineApiSecret)
+		if nil != err {
+			log.Println("close positions，执行下单错误，手动：", err, symbolRel, side, orderType, v.PositionSide, quantity, HandleKLineApiKey, HandleKLineApiSecret)
+		}
+
+		// 下单异常
+		if 0 >= binanceOrderRes.OrderId {
+			log.Println("自定义下单，binance下单错误：", orderInfoRes)
+			continue
+		}
+		log.Println("close, 执行成功：", v, binanceOrderRes)
+
+		time.Sleep(500 * time.Millisecond)
+	}
+
+	return 1
 }
 
 // HandleOrderAndOrder2 处理止盈和止损单
@@ -6742,7 +6990,7 @@ func requestBinanceDailyKLines(symbol, startTime, endTime string, limit string) 
 	// 参数
 	params := url.Values{}
 	params.Set("symbol", symbol)
-	params.Set("interval", "1d") // 日线
+	params.Set("interval", "15m") // 日线
 	if startTime != "" {
 		params.Set("startTime", startTime)
 	}
