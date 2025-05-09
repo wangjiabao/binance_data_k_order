@@ -4425,7 +4425,7 @@ func (s *sBinanceTraderHistory) HandleKLine(ctx context.Context, slot uint64) {
 
 				// 涨价百分之几
 				tmpSubRate := (tmpCurrentPrice - tmpInitPrice) / tmpInitPrice
-				if !floatGreater(tmpSubRate, 0.02, 1e-4) {
+				if !floatGreater(tmpSubRate, 0.01, 1e-4) {
 					// 不到百二忽略
 					continue
 				}
@@ -4452,7 +4452,7 @@ func (s *sBinanceTraderHistory) HandleKLine(ctx context.Context, slot uint64) {
 				}
 
 				// 开仓数量
-				tmpQty := 3 * tmpSubRate * 100 / price
+				tmpQty := 6 * tmpSubRate * 100 / price
 
 				// 精度调整
 				var (
@@ -4506,7 +4506,7 @@ func (s *sBinanceTraderHistory) HandleKLine(ctx context.Context, slot uint64) {
 						currentCoinUsdt += quantityFloat * price
 					}
 
-					time.Sleep(50 * time.Millisecond)
+					time.Sleep(100 * time.Millisecond)
 				}
 
 				fmtOrderMap := float64(0)
@@ -4514,12 +4514,12 @@ func (s *sBinanceTraderHistory) HandleKLine(ctx context.Context, slot uint64) {
 					fmtOrderMap = orderMap.Get(tmpCoinBtc).(float64)
 				}
 
-				log.Println("价格涨了百2以上", v, k.Close, tmpCurrentPrice, tmpInitPrice, "下单数量：", 3*tmpSubRate*100, price, tmpQty, tmpSq, quantityFloat, "仓位：", fmtOrderMap, binanceOrderRes, orderInfoRes, errA)
+				log.Println("价格涨了百1以上", v, k.Close, tmpCurrentPrice, tmpInitPrice, "下单数量：", 6*tmpSubRate*100, price, tmpQty, tmpSq, quantityFloat, "仓位：", fmtOrderMap, binanceOrderRes, orderInfoRes, errA)
 			} else if floatGreater(tmpInitPrice, tmpCurrentPrice, 1e-8) {
 				// 掉价
 				// 掉价百分之几
 				tmpSubRate := (tmpInitPrice - tmpCurrentPrice) / tmpInitPrice
-				if !floatGreater(tmpSubRate, 0.02, 1e-4) {
+				if !floatGreater(tmpSubRate, 0.01, 1e-4) {
 					// 不到百二忽略
 					continue
 				}
@@ -4559,7 +4559,7 @@ func (s *sBinanceTraderHistory) HandleKLine(ctx context.Context, slot uint64) {
 				}
 
 				// 平仓数量
-				tmpQty := 3 * tmpSubRate * 100 / price
+				tmpQty := 6 * tmpSubRate * 100 / price
 				if floatGreater(tmpQty, tmpOrderQty, 1e-8) {
 					tmpQty = tmpOrderQty
 				}
@@ -4620,7 +4620,7 @@ func (s *sBinanceTraderHistory) HandleKLine(ctx context.Context, slot uint64) {
 						currentCoinUsdt -= quantityFloat * price
 					}
 
-					time.Sleep(50 * time.Millisecond)
+					time.Sleep(100 * time.Millisecond)
 				}
 
 				fmtOrderMap := float64(0)
@@ -4628,7 +4628,7 @@ func (s *sBinanceTraderHistory) HandleKLine(ctx context.Context, slot uint64) {
 					fmtOrderMap = orderMap.Get(tmpCoinBtc).(float64)
 				}
 
-				log.Println("价格跌了百2以上", v, k.Close, tmpCurrentPrice, tmpInitPrice, "下单数量：", 3*tmpSubRate*100, price, tmpQty, tmpSq, quantityFloat, "仓位：", fmtOrderMap, binanceOrderRes, orderInfoRes, errA)
+				log.Println("价格跌了百1以上", v, k.Close, tmpCurrentPrice, tmpInitPrice, "下单数量：", 6*tmpSubRate*100, price, tmpQty, tmpSq, quantityFloat, "仓位：", fmtOrderMap, binanceOrderRes, orderInfoRes, errA)
 			} else {
 				fmt.Println("价格没变", v, tmpCurrentPrice, tmpInitPrice)
 				continue
@@ -4726,7 +4726,7 @@ func (s *sBinanceTraderHistory) HandleKLine(ctx context.Context, slot uint64) {
 					}
 				}
 
-				time.Sleep(50 * time.Millisecond)
+				time.Sleep(100 * time.Millisecond)
 			}
 
 			fmtOrderMap := float64(0)
@@ -4846,7 +4846,7 @@ func (s *sBinanceTraderHistory) HandleKLine(ctx context.Context, slot uint64) {
 				}
 			}
 
-			time.Sleep(50 * time.Millisecond)
+			time.Sleep(100 * time.Millisecond)
 		}
 
 		fmtOrderMap := float64(0)
