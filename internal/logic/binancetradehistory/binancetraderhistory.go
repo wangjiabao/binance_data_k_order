@@ -4637,16 +4637,17 @@ func (s *sBinanceTraderHistory) HandleKLine(ctx context.Context, slot uint64) {
 	}
 
 	log.Println("本次：coin usdt ", currentCoinUsdt)
-	orderMap.Iterator(func(k interface{}, v interface{}) bool {
-		fmt.Println("用户仓位，测试结果:", k, v)
-		return true
-	})
+	//orderMap.Iterator(func(k interface{}, v interface{}) bool {
+	//	fmt.Println("用户仓位，测试结果:", k, v)
+	//	return true
+	//})
 
 	// 本次
 	if currentCoinUsdt-0 > 1e-7 {
 		// 超过额度了，开仓
-		if floatGreater(coinUsdtOrder.Val()+currentCoinUsdt, btcUsdtOrder.Val(), 13-7) {
-			currentCoinUsdt = coinUsdtOrder.Val() + currentCoinUsdt - btcUsdtOrder.Val()
+		coinUsdtOrder.Add(currentCoinUsdt)
+		if floatGreater(coinUsdtOrder.Val(), btcUsdtOrder.Val(), 13-7) {
+			currentCoinUsdt = coinUsdtOrder.Val() - btcUsdtOrder.Val()
 
 			// 开150u的btc
 			tmp150Num := uint64(math.Abs(currentCoinUsdt))/150 + 1
@@ -4703,7 +4704,6 @@ func (s *sBinanceTraderHistory) HandleKLine(ctx context.Context, slot uint64) {
 					log.Println("仓位，信息：", errA, binanceOrderRes, orderInfoRes, quantity)
 				} else {
 					// 额度增长
-					coinUsdtOrder.Add(currentCoinUsdt)
 					btcUsdtOrder.Add(tmpOpenBtcUsdt)
 
 					if orderMap.Contains("BTCUSDT") {
@@ -4737,18 +4737,30 @@ func (s *sBinanceTraderHistory) HandleKLine(ctx context.Context, slot uint64) {
 			log.Println("本次开：btc usdt ", tmpOpenBtcUsdt, price, "数量：", quantityFloat, binanceOrderRes, orderInfoRes, errA, tmpQty, quantity, tmpSq, "仓位：", fmtOrderMap)
 		} else {
 			// 不需要开仓
-			log.Println("不需要开", coinUsdtOrder.Val(), currentCoinUsdt, coinUsdtOrder.Val()+currentCoinUsdt, btcUsdtOrder.Val())
+			log.Println("不需要开", coinUsdtOrder.Val(), currentCoinUsdt, btcUsdtOrder.Val())
 			return
 		}
 
 	} else if 0-currentCoinUsdt > 1e-7 {
+		coinUsdtOrder.Add(currentCoinUsdt)
+
 		// 关仓
 		if btcUsdtOrder.Val()-150 < 1e-7 {
 			// 不足150u不用关
+			log.Println("不需要关，不足150u的btc", btcUsdtOrder.Val())
 			return
 		}
 
 		tmpOpenBtcUsdt := math.Abs(currentCoinUsdt)
+		// 保留150最低
+		if (btcUsdtOrder.Val()-150)+currentCoinUsdt < 1e-7 {
+			tmpOpenBtcUsdt = math.Abs(btcUsdtOrder.Val() - 150)
+		}
+
+		if lessThanOrEqualZero(tmpOpenBtcUsdt, 0, 1e-7) {
+			log.Println("不需要关，不足150u的btc", tmpOpenBtcUsdt)
+			return
+		}
 
 		// 平仓
 		if !orderMap.Contains("BTCUSDT") {
@@ -4819,7 +4831,6 @@ func (s *sBinanceTraderHistory) HandleKLine(ctx context.Context, slot uint64) {
 				log.Println("仓位，信息：", errA, binanceOrderRes, orderInfoRes, quantity)
 			} else {
 				// 额度减少
-				coinUsdtOrder.Add(currentCoinUsdt)
 				btcUsdtOrder.Add(-tmpOpenBtcUsdt)
 
 				if orderMap.Contains("BTCUSDT") {
