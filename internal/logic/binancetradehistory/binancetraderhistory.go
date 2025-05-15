@@ -4674,9 +4674,16 @@ func (s *sBinanceTraderHistory) HandleKLine(ctx context.Context, slot uint64) {
 				log.Println("价格不存在，btc开关仓", v)
 				return
 			}
+
+			if "LONG" != v.PositionSide {
+				continue
+			}
+
+			btcPrice = priceAll[v.Symbol]
 			currentAmount = math.Abs(currentAmount)
 			btcUsdt = priceAll[v.Symbol] * currentAmount
-			btcPrice = priceAll[v.Symbol]
+
+			log.Println(currentAmount, btcPrice)
 			continue
 		}
 
