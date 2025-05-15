@@ -4669,13 +4669,12 @@ func (s *sBinanceTraderHistory) HandleKLine(ctx context.Context, slot uint64) {
 			return
 		}
 
-		if _, ok := priceAll[v.Symbol]; !ok {
-			log.Println("价格不存在，btc开关仓", v)
-			return
-		}
-
-		currentAmount = math.Abs(currentAmount)
 		if "BTCUSDT" == v.Symbol {
+			if _, ok := priceAll[v.Symbol]; !ok {
+				log.Println("价格不存在，btc开关仓", v)
+				return
+			}
+			currentAmount = math.Abs(currentAmount)
 			btcUsdt = priceAll[v.Symbol] * currentAmount
 			btcPrice = priceAll[v.Symbol]
 			continue
@@ -4685,6 +4684,12 @@ func (s *sBinanceTraderHistory) HandleKLine(ctx context.Context, slot uint64) {
 			continue
 		}
 
+		if _, ok := priceAll[v.Symbol]; !ok {
+			log.Println("价格不存在，btc开关仓", v)
+			return
+		}
+
+		currentAmount = math.Abs(currentAmount)
 		coinTotalUsdt += priceAll[v.Symbol] * currentAmount
 
 		//var (
