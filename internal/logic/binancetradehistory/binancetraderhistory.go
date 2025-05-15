@@ -4659,6 +4659,11 @@ func (s *sBinanceTraderHistory) HandleKLine(ctx context.Context, slot uint64) {
 
 	positions = getBinancePositionInfo(HandleKLineApiKey, HandleKLineApiSecret)
 	for _, v := range positions {
+		if _, ok := priceAll[v.Symbol]; !ok {
+			log.Println("价格不存在，btc开关仓", v)
+			return
+		}
+
 		// 新增
 		var (
 			currentAmount float64
@@ -4670,18 +4675,13 @@ func (s *sBinanceTraderHistory) HandleKLine(ctx context.Context, slot uint64) {
 		}
 
 		currentAmount = math.Abs(currentAmount)
-		if floatEqual(currentAmount, 0, 1e-7) {
-			continue
-		}
-
-		if _, ok := priceAll[v.Symbol]; !ok {
-			log.Println("价格不存在，btc开关仓", v)
-			return
-		}
-
 		if "BTCUSDT" == v.Symbol {
 			btcUsdt = priceAll[v.Symbol] * currentAmount
 			btcPrice = priceAll[v.Symbol]
+			continue
+		}
+
+		if floatEqual(currentAmount, 0, 1e-7) {
 			continue
 		}
 
