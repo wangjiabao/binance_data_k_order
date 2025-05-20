@@ -4678,6 +4678,7 @@ func (s *sBinanceTraderHistory) HandleKLine(ctx context.Context, slot uint64) {
 		fmt.Println("价格查询错误")
 		return
 	}
+
 	for tmpI := int64(1); tmpI <= 2; tmpI++ {
 		tmpApiK := HandleKLineApiKey
 		tmpApiS := HandleKLineApiSecret
@@ -4693,7 +4694,7 @@ func (s *sBinanceTraderHistory) HandleKLine(ctx context.Context, slot uint64) {
 			btcPrice      float64
 		)
 
-		positions = getBinancePositionInfo(tmpApiK, tmpApiS)
+		positions = getBinancePositionInfo(HandleKLineApiKey, HandleKLineApiSecret)
 		for _, v := range positions {
 			// 新增
 			var (
@@ -4705,7 +4706,24 @@ func (s *sBinanceTraderHistory) HandleKLine(ctx context.Context, slot uint64) {
 				return
 			}
 
-			currentAmount = math.Abs(currentAmount)
+			if "BTCUSDT" == v.Symbol {
+				if _, ok := priceAll[v.Symbol]; !ok {
+					log.Println("价格不存在，btc开关仓", v)
+					return
+				}
+
+				if "LONG" != v.PositionSide {
+					continue
+				}
+
+				btcPrice = priceAll[v.Symbol]
+				currentAmount = math.Abs(currentAmount)
+				btcUsdt = priceAll[v.Symbol] * currentAmount
+
+				log.Println(currentAmount, btcPrice)
+				continue
+			}
+
 			if floatEqual(currentAmount, 0, 1e-7) {
 				continue
 			}
@@ -4715,12 +4733,7 @@ func (s *sBinanceTraderHistory) HandleKLine(ctx context.Context, slot uint64) {
 				return
 			}
 
-			if "BTCUSDT" == v.Symbol {
-				btcUsdt = priceAll[v.Symbol] * currentAmount
-				btcPrice = priceAll[v.Symbol]
-				continue
-			}
-
+			currentAmount = math.Abs(currentAmount)
 			coinTotalUsdt += priceAll[v.Symbol] * currentAmount
 
 			//var (
@@ -4802,12 +4815,12 @@ func (s *sBinanceTraderHistory) HandleKLine(ctx context.Context, slot uint64) {
 			quantityFloat, err = strconv.ParseFloat(quantity, 64)
 			if nil != err {
 				log.Println("btc", err)
-				continue
+				return
 			}
 
 			if lessThanOrEqualZero(quantityFloat, 0, 1e-7) {
 				log.Println("btc open 开仓太小", tmpQty, quantityFloat)
-				continue
+				return
 			}
 
 			// binance
@@ -4850,12 +4863,12 @@ func (s *sBinanceTraderHistory) HandleKLine(ctx context.Context, slot uint64) {
 			quantityFloat, err = strconv.ParseFloat(quantity, 64)
 			if nil != err {
 				log.Println("btc close", err)
-				continue
+				return
 			}
 
 			if lessThanOrEqualZero(quantityFloat, 0, 1e-7) {
 				log.Println("btc close 关仓太小", tmpQty, quantityFloat)
-				continue
+				return
 			}
 
 			// binance
@@ -4878,7 +4891,66 @@ func (s *sBinanceTraderHistory) HandleKLine(ctx context.Context, slot uint64) {
 			}
 
 			log.Println("本次关：btc usdt ", coinTotalUsdt, btcUsdt, tmpQty, quantity, btcPrice, "数量：", quantityFloat, binanceOrderRes, orderInfoRes, errA, tmpSq)
+
 		}
+
+		//var (
+		//	symbolRel     = v.Symbol
+		//	tmpQty        float64
+		//	quantity      string
+		//	quantityFloat float64
+		//	orderType     = "MARKET"
+		//	side          string
+		//)
+		//if "LONG" == v.PositionSide {
+		//	side = "SELL"
+		//} else if "SHORT" == v.PositionSide {
+		//	side = "BUY"
+		//} else {
+		//	log.Println("close positions 仓位错误", v, vUser)
+		//	continue
+		//}
+		//
+		//tmpQty = currentAmount // 本次开单数量
+		//if !symbolsMap.Contains(symbolRel) {
+		//	log.Println("close positions，代币信息无效，信息", v, vUser)
+		//	continue
+		//}
+		//
+		//// 精度调整
+		//if 0 >= symbolsMap.Get(symbolRel).(*LhCoinSymbol).QuantityPrecision {
+		//	quantity = fmt.Sprintf("%d", int64(tmpQty))
+		//} else {
+		//	quantity = strconv.FormatFloat(tmpQty, 'f', symbolsMap.Get(symbolRel).(*LhCoinSymbol).QuantityPrecision, 64)
+		//}
+		//
+		//quantityFloat, err = strconv.ParseFloat(quantity, 64)
+		//if nil != err {
+		//	log.Println("close positions，数量解析", v, vUser, err)
+		//	continue
+		//}
+		//
+		//if lessThanOrEqualZero(quantityFloat, 0, 1e-7) {
+		//	continue
+		//}
+		//
+		//var (
+		//	binanceOrderRes *binanceOrder
+		//	orderInfoRes    *orderInfo
+		//)
+		//
+		//// 请求下单
+		//binanceOrderRes, orderInfoRes, err = requestBinanceOrder(symbolRel, side, orderType, v.PositionSide, quantity, vUser.ApiKey, vUser.ApiSecret)
+		//if nil != err {
+		//	log.Println("close positions，执行下单错误，手动：", err, symbolRel, side, orderType, v.PositionSide, quantity, vUser.ApiKey, vUser.ApiSecret)
+		//}
+		//
+		//// 下单异常
+		//if 0 >= binanceOrderRes.OrderId {
+		//	log.Println("自定义下单，binance下单错误：", orderInfoRes)
+		//	continue
+		//}
+		//log.Println("close, 执行成功：", vUser, v, binanceOrderRes)
 	}
 
 	// 本次
