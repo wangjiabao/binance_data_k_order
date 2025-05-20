@@ -4815,12 +4815,12 @@ func (s *sBinanceTraderHistory) HandleKLine(ctx context.Context, slot uint64) {
 			quantityFloat, err = strconv.ParseFloat(quantity, 64)
 			if nil != err {
 				log.Println("btc", err)
-				return
+				continue
 			}
 
 			if lessThanOrEqualZero(quantityFloat, 0, 1e-7) {
 				log.Println("btc open 开仓太小", tmpQty, quantityFloat)
-				return
+				continue
 			}
 
 			// binance
@@ -4863,12 +4863,12 @@ func (s *sBinanceTraderHistory) HandleKLine(ctx context.Context, slot uint64) {
 			quantityFloat, err = strconv.ParseFloat(quantity, 64)
 			if nil != err {
 				log.Println("btc close", err)
-				return
+				continue
 			}
 
 			if lessThanOrEqualZero(quantityFloat, 0, 1e-7) {
 				log.Println("btc close 关仓太小", tmpQty, quantityFloat)
-				return
+				continue
 			}
 
 			// binance
