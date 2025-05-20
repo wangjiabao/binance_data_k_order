@@ -1535,11 +1535,13 @@ var (
 	symbolsMapGate = gmap.NewStrAnyMap(true)
 
 	// 币种日线收盘价
-	initPrice            = gmap.NewStrAnyMap(true)
-	btcUsdtOrder         = gtype.NewFloat64()
-	coinUsdtOrder        = gtype.NewFloat64()
-	HandleKLineApiKey    = ""
-	HandleKLineApiSecret = ""
+	initPrice               = gmap.NewStrAnyMap(true)
+	btcUsdtOrder            = gtype.NewFloat64()
+	coinUsdtOrder           = gtype.NewFloat64()
+	HandleKLineApiKey       = ""
+	HandleKLineApiSecret    = ""
+	HandleKLineApiKeyTwo    = ""
+	HandleKLineApiSecretTwo = ""
 )
 
 // GetGlobalInfo 获取全局测试数据
@@ -4477,44 +4479,56 @@ func (s *sBinanceTraderHistory) HandleKLine(ctx context.Context, slot uint64) {
 					orderInfoRes    *orderInfo
 					errA            error
 				)
+				for tmpI := int64(1); tmpI <= 2; tmpI++ {
+					tmpIStr := strconv.FormatInt(tmpI, 10)
+					tmpKey := tmpCoinBtc + tmpIStr
 
-				if !lessThanOrEqualZero(quantityFloat, 0, 1e-7) {
-					// 请求下单
-					binanceOrderRes, orderInfoRes, errA = requestBinanceOrder(tmpSymbol, "SELL", "MARKET", "SHORT", quantity, HandleKLineApiKey, HandleKLineApiSecret)
-					if nil != errA || binanceOrderRes.OrderId <= 0 {
-						log.Println("仓位，信息：", errA, binanceOrderRes, orderInfoRes, quantity)
-					} else {
-						if orderMap.Contains(tmpCoinBtc) {
-							d1 := decimal.NewFromFloat(orderMap.Get(tmpCoinBtc).(float64))
-							d2 := decimal.NewFromFloat(quantityFloat)
-							result := d1.Add(d2)
-
-							var (
-								newRes float64
-								exact  bool
-							)
-							newRes, exact = result.Float64()
-							if !exact {
-								fmt.Println("转换过程中可能发生了精度损失", d1, d2, quantityFloat, orderMap.Get(tmpCoinBtc).(float64), newRes)
-							}
-
-							orderMap.Set(tmpCoinBtc, newRes)
-						} else {
-							orderMap.Set(tmpCoinBtc, quantityFloat)
-						}
-
-						//currentCoinUsdt += quantityFloat * price
+					tmpApiK := HandleKLineApiKey
+					tmpApiS := HandleKLineApiSecret
+					if 2 == tmpI {
+						tmpApiK = HandleKLineApiKeyTwo
+						tmpApiS = HandleKLineApiSecretTwo
 					}
 
-					time.Sleep(1 * time.Second)
+					if !lessThanOrEqualZero(quantityFloat, 0, 1e-7) {
+						// 请求下单
+						binanceOrderRes, orderInfoRes, errA = requestBinanceOrder(tmpSymbol, "SELL", "MARKET", "SHORT", quantity, tmpApiK, tmpApiS)
+						if nil != errA || binanceOrderRes.OrderId <= 0 {
+							log.Println("仓位，信息：", errA, binanceOrderRes, orderInfoRes, quantity)
+						} else {
+							if orderMap.Contains(tmpKey) {
+								d1 := decimal.NewFromFloat(orderMap.Get(tmpKey).(float64))
+								d2 := decimal.NewFromFloat(quantityFloat)
+								result := d1.Add(d2)
+
+								var (
+									newRes float64
+									exact  bool
+								)
+								newRes, exact = result.Float64()
+								if !exact {
+									fmt.Println("转换过程中可能发生了精度损失", d1, d2, quantityFloat, orderMap.Get(tmpKey).(float64), newRes)
+								}
+
+								orderMap.Set(tmpKey, newRes)
+							} else {
+								orderMap.Set(tmpKey, quantityFloat)
+							}
+
+							//currentCoinUsdt += quantityFloat * price
+						}
+
+						time.Sleep(1 * time.Second)
+					}
+
+					fmtOrderMap := float64(0)
+					if orderMap.Contains(tmpKey) {
+						fmtOrderMap = orderMap.Get(tmpKey).(float64)
+					}
+
+					log.Println("价格涨了百1以上", v, k.Close, tmpCurrentPrice, tmpInitPrice, "下单数量：", 6*tmpSubRate*100, price, tmpQty, tmpSq, quantityFloat, "仓位：", fmtOrderMap, binanceOrderRes, orderInfoRes, errA)
 				}
 
-				fmtOrderMap := float64(0)
-				if orderMap.Contains(tmpCoinBtc) {
-					fmtOrderMap = orderMap.Get(tmpCoinBtc).(float64)
-				}
-
-				log.Println("价格涨了百1以上", v, k.Close, tmpCurrentPrice, tmpInitPrice, "下单数量：", 6*tmpSubRate*100, price, tmpQty, tmpSq, quantityFloat, "仓位：", fmtOrderMap, binanceOrderRes, orderInfoRes, errA)
 			} else if floatGreater(tmpInitPrice, tmpCurrentPrice, 1e-8) {
 				// 掉价
 				// 掉价百分之几
@@ -4527,19 +4541,6 @@ func (s *sBinanceTraderHistory) HandleKLine(ctx context.Context, slot uint64) {
 				// 小于等于百二，例如：相差0.0001识别
 				// 更新初始化价格
 				initPrice.Set(tmpCoinBtc, tmpCurrentPrice)
-
-				// 平仓
-				if !orderMap.Contains(tmpCoinBtc) {
-					// 无仓位
-					continue
-				}
-
-				// 剩余仓位数量
-				tmpOrderQty := orderMap.Get(tmpCoinBtc).(float64)
-				if lessThanOrEqualZero(tmpOrderQty, 0, 1e-7) {
-					// 数量0
-					continue
-				}
 
 				// 下单 平空
 				var (
@@ -4558,77 +4559,102 @@ func (s *sBinanceTraderHistory) HandleKLine(ctx context.Context, slot uint64) {
 					continue
 				}
 
-				// 平仓数量
-				tmpQty := 6 * tmpSubRate * 100 / price
-				if floatGreater(tmpQty, tmpOrderQty, 1e-8) {
-					tmpQty = tmpOrderQty
-				}
+				for tmpI := int64(1); tmpI <= 2; tmpI++ {
+					tmpIStr := strconv.FormatInt(tmpI, 10)
+					tmpKey := tmpCoinBtc + tmpIStr
 
-				// 精度调整
-				var (
-					quantity      string
-					quantityFloat float64
-				)
-				if 0 >= tmpSq {
-					quantity = fmt.Sprintf("%d", int64(tmpQty))
-				} else {
-					quantity = strconv.FormatFloat(tmpQty, 'f', tmpSq, 64)
-				}
-
-				quantityFloat, err = strconv.ParseFloat(quantity, 64)
-				if nil != err {
-					log.Println(err)
-					continue
-				}
-
-				// binance
-				var (
-					binanceOrderRes *binanceOrder
-					orderInfoRes    *orderInfo
-					errA            error
-				)
-
-				if !lessThanOrEqualZero(quantityFloat, 0, 1e-7) {
-					// 请求下单
-					binanceOrderRes, orderInfoRes, errA = requestBinanceOrder(tmpSymbol, "BUY", "MARKET", "SHORT", quantity, HandleKLineApiKey, HandleKLineApiSecret)
-					if nil != errA || binanceOrderRes.OrderId <= 0 {
-						log.Println("仓位，信息：", errA, binanceOrderRes, orderInfoRes, quantity)
-					} else {
-						if orderMap.Contains(tmpCoinBtc) {
-							d1 := decimal.NewFromFloat(orderMap.Get(tmpCoinBtc).(float64))
-							d2 := decimal.NewFromFloat(quantityFloat)
-							result := d1.Sub(d2)
-
-							var (
-								newRes float64
-								exact  bool
-							)
-							newRes, exact = result.Float64()
-							if !exact {
-								fmt.Println("转换过程中可能发生了精度损失", d1, d2, quantityFloat, orderMap.Get(tmpCoinBtc).(float64), newRes)
-							}
-
-							if lessThanOrEqualZero(newRes, 0, 1e-7) {
-								newRes = 0
-							}
-
-							orderMap.Set(tmpCoinBtc, newRes)
-						} else {
-							orderMap.Set(tmpCoinBtc, quantityFloat)
-						}
-
-						//currentCoinUsdt -= quantityFloat * price
+					tmpApiK := HandleKLineApiKey
+					tmpApiS := HandleKLineApiSecret
+					if 2 == tmpI {
+						tmpApiK = HandleKLineApiKeyTwo
+						tmpApiS = HandleKLineApiSecretTwo
 					}
 
-					time.Sleep(1 * time.Second)
-				}
+					// 平仓
+					if !orderMap.Contains(tmpKey) {
+						// 无仓位
+						continue
+					}
 
-				fmtOrderMap := float64(0)
-				if orderMap.Contains(tmpCoinBtc) {
-					fmtOrderMap = orderMap.Get(tmpCoinBtc).(float64)
-				}
+					// 剩余仓位数量
+					tmpOrderQty := orderMap.Get(tmpKey).(float64)
+					if lessThanOrEqualZero(tmpOrderQty, 0, 1e-7) {
+						// 数量0
+						continue
+					}
 
-				log.Println("价格跌了百1以上", v, k.Close, tmpCurrentPrice, tmpInitPrice, "下单数量：", 6*tmpSubRate*100, price, tmpQty, tmpSq, quantityFloat, "仓位：", fmtOrderMap, binanceOrderRes, orderInfoRes, errA)
+					// 平仓数量
+					tmpQty := 6 * tmpSubRate * 100 / price
+					if floatGreater(tmpQty, tmpOrderQty, 1e-8) {
+						tmpQty = tmpOrderQty
+					}
+
+					// 精度调整
+					var (
+						quantity      string
+						quantityFloat float64
+					)
+					if 0 >= tmpSq {
+						quantity = fmt.Sprintf("%d", int64(tmpQty))
+					} else {
+						quantity = strconv.FormatFloat(tmpQty, 'f', tmpSq, 64)
+					}
+
+					quantityFloat, err = strconv.ParseFloat(quantity, 64)
+					if nil != err {
+						log.Println(err)
+						continue
+					}
+
+					// binance
+					var (
+						binanceOrderRes *binanceOrder
+						orderInfoRes    *orderInfo
+						errA            error
+					)
+
+					if !lessThanOrEqualZero(quantityFloat, 0, 1e-7) {
+						// 请求下单
+						binanceOrderRes, orderInfoRes, errA = requestBinanceOrder(tmpSymbol, "BUY", "MARKET", "SHORT", quantity, tmpApiK, tmpApiS)
+						if nil != errA || binanceOrderRes.OrderId <= 0 {
+							log.Println("仓位，信息：", errA, binanceOrderRes, orderInfoRes, quantity)
+						} else {
+							if orderMap.Contains(tmpKey) {
+								d1 := decimal.NewFromFloat(orderMap.Get(tmpKey).(float64))
+								d2 := decimal.NewFromFloat(quantityFloat)
+								result := d1.Sub(d2)
+
+								var (
+									newRes float64
+									exact  bool
+								)
+								newRes, exact = result.Float64()
+								if !exact {
+									fmt.Println("转换过程中可能发生了精度损失", d1, d2, quantityFloat, orderMap.Get(tmpKey).(float64), newRes)
+								}
+
+								if lessThanOrEqualZero(newRes, 0, 1e-7) {
+									newRes = 0
+								}
+
+								orderMap.Set(tmpKey, newRes)
+							} else {
+								orderMap.Set(tmpKey, quantityFloat)
+							}
+
+							//currentCoinUsdt -= quantityFloat * price
+						}
+
+						time.Sleep(1 * time.Second)
+					}
+
+					fmtOrderMap := float64(0)
+					if orderMap.Contains(tmpKey) {
+						fmtOrderMap = orderMap.Get(tmpKey).(float64)
+					}
+
+					log.Println("价格跌了百1以上", v, k.Close, tmpCurrentPrice, tmpInitPrice, "下单数量：", 6*tmpSubRate*100, price, tmpQty, tmpSq, quantityFloat, "仓位：", fmtOrderMap, binanceOrderRes, orderInfoRes, errA)
+				}
 			} else {
 				fmt.Println("价格没变", v, tmpCurrentPrice, tmpInitPrice)
 				continue
@@ -4643,208 +4669,216 @@ func (s *sBinanceTraderHistory) HandleKLine(ctx context.Context, slot uint64) {
 	//})
 
 	// 查询全部持仓
-	var (
-		positions     []*BinancePosition
-		coinTotalUsdt float64
-		priceAll      map[string]float64
-		btcUsdt       float64
-		btcPrice      float64
-	)
 
+	var (
+		priceAll map[string]float64
+	)
 	priceAll, err = getAllUSDMFuturesPrices()
 	if nil != err {
 		fmt.Println("价格查询错误")
 		return
 	}
+	for tmpI := int64(1); tmpI <= 2; tmpI++ {
+		tmpApiK := HandleKLineApiKey
+		tmpApiS := HandleKLineApiSecret
+		if 2 == tmpI {
+			tmpApiK = HandleKLineApiKeyTwo
+			tmpApiS = HandleKLineApiSecretTwo
+		}
 
-	positions = getBinancePositionInfo(HandleKLineApiKey, HandleKLineApiSecret)
-	for _, v := range positions {
-		// 新增
 		var (
-			currentAmount float64
-		)
-		currentAmount, err = strconv.ParseFloat(v.PositionAmt, 64)
-		if nil != err {
-			log.Println("c获取用户仓位接口，解析出错", v)
-			return
-		}
-
-		currentAmount = math.Abs(currentAmount)
-		if floatEqual(currentAmount, 0, 1e-7) {
-			continue
-		}
-
-		if _, ok := priceAll[v.Symbol]; !ok {
-			log.Println("价格不存在，btc开关仓", v)
-			return
-		}
-
-		if "BTCUSDT" == v.Symbol {
-			btcUsdt = priceAll[v.Symbol] * currentAmount
-			btcPrice = priceAll[v.Symbol]
-			continue
-		}
-
-		coinTotalUsdt += priceAll[v.Symbol] * currentAmount
-
-		//var (
-		//	symbolRel     = v.Symbol
-		//	tmpQty        float64
-		//	quantity      string
-		//	quantityFloat float64
-		//	orderType     = "MARKET"
-		//	side          string
-		//)
-		//if "LONG" == v.PositionSide {
-		//	side = "SELL"
-		//} else if "SHORT" == v.PositionSide {
-		//	side = "BUY"
-		//} else {
-		//	log.Println("close positions 仓位错误", v, vUser)
-		//	continue
-		//}
-		//
-		//tmpQty = currentAmount // 本次开单数量
-		//if !symbolsMap.Contains(symbolRel) {
-		//	log.Println("close positions，代币信息无效，信息", v, vUser)
-		//	continue
-		//}
-		//
-		//// 精度调整
-		//if 0 >= symbolsMap.Get(symbolRel).(*LhCoinSymbol).QuantityPrecision {
-		//	quantity = fmt.Sprintf("%d", int64(tmpQty))
-		//} else {
-		//	quantity = strconv.FormatFloat(tmpQty, 'f', symbolsMap.Get(symbolRel).(*LhCoinSymbol).QuantityPrecision, 64)
-		//}
-		//
-		//quantityFloat, err = strconv.ParseFloat(quantity, 64)
-		//if nil != err {
-		//	log.Println("close positions，数量解析", v, vUser, err)
-		//	continue
-		//}
-		//
-		//if lessThanOrEqualZero(quantityFloat, 0, 1e-7) {
-		//	continue
-		//}
-		//
-		//var (
-		//	binanceOrderRes *binanceOrder
-		//	orderInfoRes    *orderInfo
-		//)
-		//
-		//// 请求下单
-		//binanceOrderRes, orderInfoRes, err = requestBinanceOrder(symbolRel, side, orderType, v.PositionSide, quantity, vUser.ApiKey, vUser.ApiSecret)
-		//if nil != err {
-		//	log.Println("close positions，执行下单错误，手动：", err, symbolRel, side, orderType, v.PositionSide, quantity, vUser.ApiKey, vUser.ApiSecret)
-		//}
-		//
-		//// 下单异常
-		//if 0 >= binanceOrderRes.OrderId {
-		//	log.Println("自定义下单，binance下单错误：", orderInfoRes)
-		//	continue
-		//}
-		//log.Println("close, 执行成功：", vUser, v, binanceOrderRes)
-	}
-
-	if 100 < coinTotalUsdt-btcUsdt {
-		// 开
-		tmp := coinTotalUsdt - btcUsdt
-		tmpQty := tmp / btcPrice
-
-		// 精度调整
-		var (
-			quantity      string
-			quantityFloat float64
-			tmpSq         = symbolsMap.Get("BTCUSDT").(*entity.LhCoinSymbol).QuantityPrecision
-		)
-		if 0 >= tmpSq {
-			quantity = fmt.Sprintf("%d", int64(tmpQty))
-		} else {
-			quantity = strconv.FormatFloat(tmpQty, 'f', tmpSq, 64)
-		}
-
-		quantityFloat, err = strconv.ParseFloat(quantity, 64)
-		if nil != err {
-			log.Println("btc", err)
-			return
-		}
-
-		if lessThanOrEqualZero(quantityFloat, 0, 1e-7) {
-			log.Println("btc open 开仓太小", tmpQty, quantityFloat)
-			return
-		}
-
-		// binance
-		var (
-			binanceOrderRes *binanceOrder
-			orderInfoRes    *orderInfo
-			errA            error
+			positions     []*BinancePosition
+			coinTotalUsdt float64
+			btcUsdt       float64
+			btcPrice      float64
 		)
 
-		if !lessThanOrEqualZero(quantityFloat, 0, 1e-7) {
-			// 请求下单
-			binanceOrderRes, orderInfoRes, errA = requestBinanceOrder("BTCUSDT", "BUY", "MARKET", "LONG", quantity, HandleKLineApiKey, HandleKLineApiSecret)
-			//if nil != errA || binanceOrderRes.OrderId <= 0 {
-			//	log.Println("仓位，信息：", errA, binanceOrderRes, orderInfoRes, quantity)
+		positions = getBinancePositionInfo(tmpApiK, tmpApiS)
+		for _, v := range positions {
+			// 新增
+			var (
+				currentAmount float64
+			)
+			currentAmount, err = strconv.ParseFloat(v.PositionAmt, 64)
+			if nil != err {
+				log.Println("c获取用户仓位接口，解析出错", v)
+				return
+			}
+
+			currentAmount = math.Abs(currentAmount)
+			if floatEqual(currentAmount, 0, 1e-7) {
+				continue
+			}
+
+			if _, ok := priceAll[v.Symbol]; !ok {
+				log.Println("价格不存在，btc开关仓", v)
+				return
+			}
+
+			if "BTCUSDT" == v.Symbol {
+				btcUsdt = priceAll[v.Symbol] * currentAmount
+				btcPrice = priceAll[v.Symbol]
+				continue
+			}
+
+			coinTotalUsdt += priceAll[v.Symbol] * currentAmount
+
+			//var (
+			//	symbolRel     = v.Symbol
+			//	tmpQty        float64
+			//	quantity      string
+			//	quantityFloat float64
+			//	orderType     = "MARKET"
+			//	side          string
+			//)
+			//if "LONG" == v.PositionSide {
+			//	side = "SELL"
+			//} else if "SHORT" == v.PositionSide {
+			//	side = "BUY"
 			//} else {
+			//	log.Println("close positions 仓位错误", v, vUser)
+			//	continue
 			//}
-
-			time.Sleep(1 * time.Second)
-		}
-
-		log.Println("本次开：btc usdt ", coinTotalUsdt, btcUsdt, tmpQty, quantity, btcPrice, "数量：", quantityFloat, binanceOrderRes, orderInfoRes, errA, tmpSq)
-
-	} else if 1 < btcUsdt-coinTotalUsdt {
-		// 关
-		tmp := btcUsdt - coinTotalUsdt
-		tmpQty := tmp / btcPrice
-
-		// 精度调整
-		var (
-			quantity      string
-			quantityFloat float64
-			tmpSq         = symbolsMap.Get("BTCUSDT").(*entity.LhCoinSymbol).QuantityPrecision
-		)
-		if 0 >= tmpSq {
-			quantity = fmt.Sprintf("%d", int64(tmpQty))
-		} else {
-			quantity = strconv.FormatFloat(tmpQty, 'f', tmpSq, 64)
-		}
-
-		quantityFloat, err = strconv.ParseFloat(quantity, 64)
-		if nil != err {
-			log.Println("btc close", err)
-			return
-		}
-
-		if lessThanOrEqualZero(quantityFloat, 0, 1e-7) {
-			log.Println("btc close 关仓太小", tmpQty, quantityFloat)
-			return
-		}
-
-		// binance
-		var (
-			binanceOrderRes *binanceOrder
-			orderInfoRes    *orderInfo
-			errA            error
-		)
-
-		if !lessThanOrEqualZero(quantityFloat, 0, 1e-7) {
-			// 请求下单
-			binanceOrderRes, orderInfoRes, errA = requestBinanceOrder("BTCUSDT", "SELL", "MARKET", "LONG", quantity, HandleKLineApiKey, HandleKLineApiSecret)
-			//if nil != errA || binanceOrderRes.OrderId <= 0 {
-			//	log.Println("仓位，信息：", errA, binanceOrderRes, orderInfoRes, quantity)
-			//} else {
 			//
+			//tmpQty = currentAmount // 本次开单数量
+			//if !symbolsMap.Contains(symbolRel) {
+			//	log.Println("close positions，代币信息无效，信息", v, vUser)
+			//	continue
 			//}
-
-			time.Sleep(1 * time.Second)
+			//
+			//// 精度调整
+			//if 0 >= symbolsMap.Get(symbolRel).(*LhCoinSymbol).QuantityPrecision {
+			//	quantity = fmt.Sprintf("%d", int64(tmpQty))
+			//} else {
+			//	quantity = strconv.FormatFloat(tmpQty, 'f', symbolsMap.Get(symbolRel).(*LhCoinSymbol).QuantityPrecision, 64)
+			//}
+			//
+			//quantityFloat, err = strconv.ParseFloat(quantity, 64)
+			//if nil != err {
+			//	log.Println("close positions，数量解析", v, vUser, err)
+			//	continue
+			//}
+			//
+			//if lessThanOrEqualZero(quantityFloat, 0, 1e-7) {
+			//	continue
+			//}
+			//
+			//var (
+			//	binanceOrderRes *binanceOrder
+			//	orderInfoRes    *orderInfo
+			//)
+			//
+			//// 请求下单
+			//binanceOrderRes, orderInfoRes, err = requestBinanceOrder(symbolRel, side, orderType, v.PositionSide, quantity, vUser.ApiKey, vUser.ApiSecret)
+			//if nil != err {
+			//	log.Println("close positions，执行下单错误，手动：", err, symbolRel, side, orderType, v.PositionSide, quantity, vUser.ApiKey, vUser.ApiSecret)
+			//}
+			//
+			//// 下单异常
+			//if 0 >= binanceOrderRes.OrderId {
+			//	log.Println("自定义下单，binance下单错误：", orderInfoRes)
+			//	continue
+			//}
+			//log.Println("close, 执行成功：", vUser, v, binanceOrderRes)
 		}
 
-		log.Println("本次关：btc usdt ", coinTotalUsdt, btcUsdt, tmpQty, quantity, btcPrice, "数量：", quantityFloat, binanceOrderRes, orderInfoRes, errA, tmpSq)
+		if 100 < coinTotalUsdt-btcUsdt {
+			// 开
+			tmp := coinTotalUsdt - btcUsdt
+			tmpQty := tmp / btcPrice
 
-	} else {
-		return
+			// 精度调整
+			var (
+				quantity      string
+				quantityFloat float64
+				tmpSq         = symbolsMap.Get("BTCUSDT").(*entity.LhCoinSymbol).QuantityPrecision
+			)
+			if 0 >= tmpSq {
+				quantity = fmt.Sprintf("%d", int64(tmpQty))
+			} else {
+				quantity = strconv.FormatFloat(tmpQty, 'f', tmpSq, 64)
+			}
+
+			quantityFloat, err = strconv.ParseFloat(quantity, 64)
+			if nil != err {
+				log.Println("btc", err)
+				continue
+			}
+
+			if lessThanOrEqualZero(quantityFloat, 0, 1e-7) {
+				log.Println("btc open 开仓太小", tmpQty, quantityFloat)
+				continue
+			}
+
+			// binance
+			var (
+				binanceOrderRes *binanceOrder
+				orderInfoRes    *orderInfo
+				errA            error
+			)
+
+			if !lessThanOrEqualZero(quantityFloat, 0, 1e-7) {
+				// 请求下单
+				binanceOrderRes, orderInfoRes, errA = requestBinanceOrder("BTCUSDT", "BUY", "MARKET", "LONG", quantity, tmpApiK, tmpApiS)
+				//if nil != errA || binanceOrderRes.OrderId <= 0 {
+				//	log.Println("仓位，信息：", errA, binanceOrderRes, orderInfoRes, quantity)
+				//} else {
+				//}
+
+				time.Sleep(1 * time.Second)
+			}
+
+			log.Println("本次开：btc usdt ", coinTotalUsdt, btcUsdt, tmpQty, quantity, btcPrice, "数量：", quantityFloat, binanceOrderRes, orderInfoRes, errA, tmpSq)
+
+		} else if 1 < btcUsdt-coinTotalUsdt {
+			// 关
+			tmp := btcUsdt - coinTotalUsdt
+			tmpQty := tmp / btcPrice
+
+			// 精度调整
+			var (
+				quantity      string
+				quantityFloat float64
+				tmpSq         = symbolsMap.Get("BTCUSDT").(*entity.LhCoinSymbol).QuantityPrecision
+			)
+			if 0 >= tmpSq {
+				quantity = fmt.Sprintf("%d", int64(tmpQty))
+			} else {
+				quantity = strconv.FormatFloat(tmpQty, 'f', tmpSq, 64)
+			}
+
+			quantityFloat, err = strconv.ParseFloat(quantity, 64)
+			if nil != err {
+				log.Println("btc close", err)
+				continue
+			}
+
+			if lessThanOrEqualZero(quantityFloat, 0, 1e-7) {
+				log.Println("btc close 关仓太小", tmpQty, quantityFloat)
+				continue
+			}
+
+			// binance
+			var (
+				binanceOrderRes *binanceOrder
+				orderInfoRes    *orderInfo
+				errA            error
+			)
+
+			if !lessThanOrEqualZero(quantityFloat, 0, 1e-7) {
+				// 请求下单
+				binanceOrderRes, orderInfoRes, errA = requestBinanceOrder("BTCUSDT", "SELL", "MARKET", "LONG", quantity, tmpApiK, tmpApiS)
+				//if nil != errA || binanceOrderRes.OrderId <= 0 {
+				//	log.Println("仓位，信息：", errA, binanceOrderRes, orderInfoRes, quantity)
+				//} else {
+				//
+				//}
+
+				time.Sleep(1 * time.Second)
+			}
+
+			log.Println("本次关：btc usdt ", coinTotalUsdt, btcUsdt, tmpQty, quantity, btcPrice, "数量：", quantityFloat, binanceOrderRes, orderInfoRes, errA, tmpSq)
+		}
 	}
 
 	// 本次
@@ -5228,86 +5262,96 @@ func (s *sBinanceTraderHistory) CloseBinanceUserPositions(ctx context.Context) u
 		err error
 	)
 
-	var (
-		positions []*BinancePosition
-	)
+	for tmpI := int64(1); tmpI <= 2; tmpI++ {
 
-	positions = getBinancePositionInfo(HandleKLineApiKey, HandleKLineApiSecret)
-	for _, v := range positions {
-		// 新增
-		var (
-			currentAmount float64
-		)
-		currentAmount, err = strconv.ParseFloat(v.PositionAmt, 64)
-		if nil != err {
-			log.Println("close positions 获取用户仓位接口，解析出错", v)
-			continue
-		}
-
-		currentAmount = math.Abs(currentAmount)
-		if floatEqual(currentAmount, 0, 1e-7) {
-			continue
+		tmpApiK := HandleKLineApiKey
+		tmpApiS := HandleKLineApiSecret
+		if 2 == tmpI {
+			tmpApiK = HandleKLineApiKeyTwo
+			tmpApiS = HandleKLineApiSecretTwo
 		}
 
 		var (
-			symbolRel     = v.Symbol
-			tmpQty        float64
-			quantity      string
-			quantityFloat float64
-			orderType     = "MARKET"
-			side          string
-		)
-		if "LONG" == v.PositionSide {
-			side = "SELL"
-		} else if "SHORT" == v.PositionSide {
-			side = "BUY"
-		} else {
-			log.Println("close positions 仓位错误", v)
-			continue
-		}
-
-		tmpQty = currentAmount // 本次开单数量
-		if !symbolsMap.Contains(symbolRel) {
-			log.Println("close positions，代币信息无效，信息", v)
-			continue
-		}
-
-		// 精度调整
-		if 0 >= symbolsMap.Get(symbolRel).(*entity.LhCoinSymbol).QuantityPrecision {
-			quantity = fmt.Sprintf("%d", int64(tmpQty))
-		} else {
-			quantity = strconv.FormatFloat(tmpQty, 'f', symbolsMap.Get(symbolRel).(*entity.LhCoinSymbol).QuantityPrecision, 64)
-		}
-
-		quantityFloat, err = strconv.ParseFloat(quantity, 64)
-		if nil != err {
-			log.Println("close positions，数量解析", v, err)
-			continue
-		}
-
-		if lessThanOrEqualZero(quantityFloat, 0, 1e-7) {
-			continue
-		}
-
-		var (
-			binanceOrderRes *binanceOrder
-			orderInfoRes    *orderInfo
+			positions []*BinancePosition
 		)
 
-		// 请求下单
-		binanceOrderRes, orderInfoRes, err = requestBinanceOrder(symbolRel, side, orderType, v.PositionSide, quantity, HandleKLineApiKey, HandleKLineApiSecret)
-		if nil != err {
-			log.Println("close positions，执行下单错误，手动：", err, symbolRel, side, orderType, v.PositionSide, quantity, HandleKLineApiKey, HandleKLineApiSecret)
-		}
+		positions = getBinancePositionInfo(tmpApiK, tmpApiS)
+		for _, v := range positions {
+			// 新增
+			var (
+				currentAmount float64
+			)
+			currentAmount, err = strconv.ParseFloat(v.PositionAmt, 64)
+			if nil != err {
+				log.Println("close positions 获取用户仓位接口，解析出错", v)
+				continue
+			}
 
-		// 下单异常
-		if 0 >= binanceOrderRes.OrderId {
-			log.Println("自定义下单，binance下单错误：", orderInfoRes)
-			continue
-		}
-		log.Println("close, 执行成功：", v, binanceOrderRes)
+			currentAmount = math.Abs(currentAmount)
+			if floatEqual(currentAmount, 0, 1e-7) {
+				continue
+			}
 
-		time.Sleep(500 * time.Millisecond)
+			var (
+				symbolRel     = v.Symbol
+				tmpQty        float64
+				quantity      string
+				quantityFloat float64
+				orderType     = "MARKET"
+				side          string
+			)
+			if "LONG" == v.PositionSide {
+				side = "SELL"
+			} else if "SHORT" == v.PositionSide {
+				side = "BUY"
+			} else {
+				log.Println("close positions 仓位错误", v)
+				continue
+			}
+
+			tmpQty = currentAmount // 本次开单数量
+			if !symbolsMap.Contains(symbolRel) {
+				log.Println("close positions，代币信息无效，信息", v)
+				continue
+			}
+
+			// 精度调整
+			if 0 >= symbolsMap.Get(symbolRel).(*entity.LhCoinSymbol).QuantityPrecision {
+				quantity = fmt.Sprintf("%d", int64(tmpQty))
+			} else {
+				quantity = strconv.FormatFloat(tmpQty, 'f', symbolsMap.Get(symbolRel).(*entity.LhCoinSymbol).QuantityPrecision, 64)
+			}
+
+			quantityFloat, err = strconv.ParseFloat(quantity, 64)
+			if nil != err {
+				log.Println("close positions，数量解析", v, err)
+				continue
+			}
+
+			if lessThanOrEqualZero(quantityFloat, 0, 1e-7) {
+				continue
+			}
+
+			var (
+				binanceOrderRes *binanceOrder
+				orderInfoRes    *orderInfo
+			)
+
+			// 请求下单
+			binanceOrderRes, orderInfoRes, err = requestBinanceOrder(symbolRel, side, orderType, v.PositionSide, quantity, tmpApiK, tmpApiS)
+			if nil != err {
+				log.Println("close positions，执行下单错误，手动：", err, symbolRel, side, orderType, v.PositionSide, quantity, tmpApiK, tmpApiS)
+			}
+
+			// 下单异常
+			if 0 >= binanceOrderRes.OrderId {
+				log.Println("自定义下单，binance下单错误：", orderInfoRes)
+				continue
+			}
+			log.Println("close, 执行成功：", v, binanceOrderRes)
+
+			time.Sleep(500 * time.Millisecond)
+		}
 	}
 
 	return 1
