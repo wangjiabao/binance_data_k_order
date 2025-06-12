@@ -4693,7 +4693,7 @@ func (s *sBinanceTraderHistory) HandleKLine(ctx context.Context, slot uint64) {
 			btcPrice      float64
 		)
 
-		positions = getBinancePositionInfo(HandleKLineApiKey, HandleKLineApiSecret)
+		positions = getBinancePositionInfo(tmpApiK, tmpApiS)
 		for _, v := range positions {
 			// 新增
 			var (
