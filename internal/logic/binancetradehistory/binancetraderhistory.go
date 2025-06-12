@@ -1535,13 +1535,13 @@ var (
 	symbolsMapGate = gmap.NewStrAnyMap(true)
 
 	// 币种日线收盘价
-	initPrice               = gmap.NewStrAnyMap(true)
-	btcUsdtOrder            = gtype.NewFloat64()
-	coinUsdtOrder           = gtype.NewFloat64()
-	HandleKLineApiKey       = ""
-	HandleKLineApiSecret    = ""
-	HandleKLineApiKeyTwo    = ""
-	HandleKLineApiSecretTwo = ""
+	initPrice            = gmap.NewStrAnyMap(true)
+	btcUsdtOrder         = gtype.NewFloat64()
+	coinUsdtOrder        = gtype.NewFloat64()
+	HandleKLineApiKey    = ""
+	HandleKLineApiSecret = ""
+	//HandleKLineApiKeyTwo    = ""
+	//HandleKLineApiSecretTwo = ""
 )
 
 // GetGlobalInfo 获取全局测试数据
@@ -4339,7 +4339,6 @@ func floatGreater(a, b, epsilon float64) bool {
 }
 
 func (s *sBinanceTraderHistory) HandleKLine(ctx context.Context, slot uint64) {
-	// 使用中国时区
 	var (
 		loc *time.Location
 		err error
@@ -4355,14 +4354,14 @@ func (s *sBinanceTraderHistory) HandleKLine(ctx context.Context, slot uint64) {
 
 	now := time.Now().In(loc)
 
-	// 对齐到当前时间的上一个 15 分钟整点
-	minute := now.Minute()
-	alignedMinute := (minute / 15) * 15
-	currentSlotEnd := time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), alignedMinute, 0, 0, loc)
+	// 对齐到当前时间的上一个 4 小时整点
+	hour := now.Hour()
+	alignedHour := (hour / 4) * 4
+	currentSlotEnd := time.Date(now.Year(), now.Month(), now.Day(), alignedHour, 0, 0, 0, loc)
 
 	// 计算目标 slot 的结束时间，减去1ms
-	endTime := currentSlotEnd.Add(-time.Duration(slot-1) * 15 * time.Minute).Add(-time.Millisecond)
-	startTime := endTime.Add(-15*time.Minute + time.Millisecond) // 加回那1ms，保持时长为15分钟
+	endTime := currentSlotEnd.Add(-time.Duration(slot-1) * 4 * time.Hour).Add(-time.Millisecond)
+	startTime := endTime.Add(-4*time.Hour + time.Millisecond) // 加回那1ms，保持时长为4小时
 
 	startMs := fmt.Sprintf("%d", startTime.UnixMilli())
 	endMs := fmt.Sprintf("%d", endTime.UnixMilli())
@@ -4479,16 +4478,16 @@ func (s *sBinanceTraderHistory) HandleKLine(ctx context.Context, slot uint64) {
 					orderInfoRes    *orderInfo
 					errA            error
 				)
-				for tmpI := int64(1); tmpI <= 2; tmpI++ {
+				for tmpI := int64(1); tmpI <= 1; tmpI++ {
 					tmpIStr := strconv.FormatInt(tmpI, 10)
 					tmpKey := tmpCoinBtc + tmpIStr
 
 					tmpApiK := HandleKLineApiKey
 					tmpApiS := HandleKLineApiSecret
-					if 2 == tmpI {
-						tmpApiK = HandleKLineApiKeyTwo
-						tmpApiS = HandleKLineApiSecretTwo
-					}
+					//if 2 == tmpI {
+					//	tmpApiK = HandleKLineApiKeyTwo
+					//	tmpApiS = HandleKLineApiSecretTwo
+					//}
 
 					if !lessThanOrEqualZero(quantityFloat, 0, 1e-7) {
 						// 请求下单
@@ -4559,16 +4558,16 @@ func (s *sBinanceTraderHistory) HandleKLine(ctx context.Context, slot uint64) {
 					continue
 				}
 
-				for tmpI := int64(1); tmpI <= 2; tmpI++ {
+				for tmpI := int64(1); tmpI <= 1; tmpI++ {
 					tmpIStr := strconv.FormatInt(tmpI, 10)
 					tmpKey := tmpCoinBtc + tmpIStr
 
 					tmpApiK := HandleKLineApiKey
 					tmpApiS := HandleKLineApiSecret
-					if 2 == tmpI {
-						tmpApiK = HandleKLineApiKeyTwo
-						tmpApiS = HandleKLineApiSecretTwo
-					}
+					//if 2 == tmpI {
+					//	tmpApiK = HandleKLineApiKeyTwo
+					//	tmpApiS = HandleKLineApiSecretTwo
+					//}
 
 					// 平仓
 					if !orderMap.Contains(tmpKey) {
@@ -4679,13 +4678,13 @@ func (s *sBinanceTraderHistory) HandleKLine(ctx context.Context, slot uint64) {
 		return
 	}
 
-	for tmpI := int64(1); tmpI <= 2; tmpI++ {
+	for tmpI := int64(1); tmpI <= 1; tmpI++ {
 		tmpApiK := HandleKLineApiKey
 		tmpApiS := HandleKLineApiSecret
-		if 2 == tmpI {
-			tmpApiK = HandleKLineApiKeyTwo
-			tmpApiS = HandleKLineApiSecretTwo
-		}
+		//if 2 == tmpI {
+		//	tmpApiK = HandleKLineApiKeyTwo
+		//	tmpApiS = HandleKLineApiSecretTwo
+		//}
 
 		var (
 			positions     []*BinancePosition
@@ -5334,14 +5333,14 @@ func (s *sBinanceTraderHistory) CloseBinanceUserPositions(ctx context.Context) u
 		err error
 	)
 
-	for tmpI := int64(1); tmpI <= 2; tmpI++ {
+	for tmpI := int64(1); tmpI <= 1; tmpI++ {
 
 		tmpApiK := HandleKLineApiKey
 		tmpApiS := HandleKLineApiSecret
-		if 2 == tmpI {
-			tmpApiK = HandleKLineApiKeyTwo
-			tmpApiS = HandleKLineApiSecretTwo
-		}
+		//if 2 == tmpI {
+		//	tmpApiK = HandleKLineApiKeyTwo
+		//	tmpApiS = HandleKLineApiSecretTwo
+		//}
 
 		var (
 			positions []*BinancePosition
@@ -7320,7 +7319,7 @@ func requestBinanceDailyKLines(symbol, startTime, endTime string, limit string) 
 	// 参数
 	params := url.Values{}
 	params.Set("symbol", symbol)
-	params.Set("interval", "15m") // 日线
+	params.Set("interval", "4h") // 日线
 	if startTime != "" {
 		params.Set("startTime", startTime)
 	}
